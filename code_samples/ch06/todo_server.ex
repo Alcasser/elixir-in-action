@@ -25,7 +25,8 @@ defmodule TodoServer do
   end
 
   @impl GenServer
-  def handle_call({:entries, date}, _, todo_list) do
+  def handle_call({:entries, date}, {request_id, pid}, todo_list) do
+    IO.puts({request_id, pid})
     {
       :reply,
       TodoList.entries(todo_list, date),

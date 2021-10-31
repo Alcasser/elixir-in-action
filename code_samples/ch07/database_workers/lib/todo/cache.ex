@@ -11,7 +11,7 @@ defmodule Todo.Cache do
 
   @impl GenServer
   def init(_) do
-    Todo.SqliteDatabase.start()
+    Todo.ConcurrentDatabase.start()
     {:ok, %{}}
   end
 

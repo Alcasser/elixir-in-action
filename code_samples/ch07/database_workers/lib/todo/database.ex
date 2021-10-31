@@ -46,7 +46,7 @@ defmodule Todo.Database do
   end
 end
 
-defmodule Todo.SqliteDatabase do
+defmodule Todo.ConcurrentDatabase do
   use GenServer
 
   def start do
@@ -54,16 +54,56 @@ defmodule Todo.SqliteDatabase do
   end
 
   def store(name, %Todo.List{} = data) do
-    GenServer.cast(__MODULE__, {:store, name, data})
+    name
+    |> choose_worker()
+    |> Todo.DatabaseWorker.store(name, data)
   end
 
   def get(name) do
-    GenServer.call(__MODULE__, {:get, name})
+    name
+    |> choose_worker()
+    |> Todo.DatabaseWorker.get(name)
+  end
+
+  defp choose_worker(name) do
+    GenServer.call(__MODULE__, {:choose_worker, name})
   end
 
   @impl GenServer
   def init(_) do
-    {:ok, conn} = Exqlite.Sqlite3.open("file:data.db")
+    workers = for index <- 1..3, into: %{} do
+      {:ok, pid} = Todo.DatabaseWorker.start()
+      {index - 1, pid}
+    end
+    {:ok, workers}
+  end
+
+  @impl GenServer
+  def handle_call({:choose_worker, key}, _, workers) do
+    worker_key = :erlang.phash2(key, 3)
+    {:reply, Map.get(workers, worker_key), workers}
+  end
+end
+
+defmodule Todo.DatabaseWorker do
+  use GenServer
+
+  def start do
+    GenServer.start(__MODULE__, nil)
+  end
+
+  def store(worker, name, %Todo.List{} = data) do
+    GenServer.cast(worker, {:store, name, data})
+  end
+
+  def get(worker, name) do
+    GenServer.call(worker, {:get, name})
+  end
+
+  @impl GenServer
+  def init(_) do
+    [pid_number | _] = Regex.run(~r/(\.|\d)+/, inspect self())
+    {:ok, conn} = Exqlite.Sqlite3.open("file:data_#{pid_number}.db")
     case Exqlite.Sqlite3.execute(conn, "create table persist (id integer primary key, name text, data text)") do
       _ -> nil
     end

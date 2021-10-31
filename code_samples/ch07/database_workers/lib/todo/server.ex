@@ -22,7 +22,7 @@ defmodule Todo.Server do
   @impl GenServer
   def handle_cast({:add_entry, new_entry}, {name, todo_list}) do
     new_list = Todo.List.add_entry(todo_list, new_entry)
-    Todo.SqliteDatabase.store(name, new_list)
+    Todo.ConcurrentDatabase.store(name, new_list)
     {:noreply, {name, new_list}}
   end
 
@@ -37,7 +37,7 @@ defmodule Todo.Server do
 
   @impl GenServer
   def handle_info({:real_init, name}, nil) do
-    case Todo.SqliteDatabase.get(name) do
+    case Todo.ConcurrentDatabase.get(name) do
       [] -> {:noreply, {name, Todo.List.new()}}
       [todo_list] -> {:noreply, {name, todo_list}}
     end
